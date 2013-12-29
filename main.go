@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
+	"os"
 	"text/template"
 )
 
@@ -58,14 +59,19 @@ func tellPackerProvisionersToRun(ip string) bool {
 }
 
 func main() {
-	fmt.Println("Next step: read input from JSON config")
+	username := os.Args[1]
+	password := os.Args[2]
+	hostUrl := os.Args[3]
+	pathToVm := os.Args[4]
+
 	a := auth{
-		"someusername",
-		"somepassword",
-		"somehosturl",
+		username,
+		password,
+		hostUrl,
 	}
+
 	vc := login(a)
-	templateVm := vc.getVmTemplate("somepathtovm")
+	templateVm := vc.getVmTemplate(pathToVm)
 	fmt.Println(templateVm)
 	spec := customizationSpec{
 		ip: "1.2.3.4",
