@@ -77,15 +77,3 @@ func (vim *VimSession) findByInventoryPath(inventoryPath string) (vm, error) {
 		return vm{}, errors.New("Found nothing")
 	}
 }
-
-func (vim *VimSession) deployVM(templateVm vm, spec customizationSpec) (newVm vm) {
-	newVm = vm{
-		Name: spec.name,
-		Ip:   spec.ip,
-	}
-	return newVm
-}
-
-func (vim *VimSession) markAsTemplate(thisVm vm) bool {
-	return true
-}

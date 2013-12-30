@@ -66,3 +66,15 @@ func (v *vm) retrieveProperties(props []string) map[string]string {
 	// v.Parent = parsePropertyValue("parent", root)
 	// return nil, errors.New("Found nothing")
 }
+
+func (v *vm) deployVM(spec customizationSpec) (newVm vm) {
+	newVm = vm{
+		Name: spec.name,
+		Ip:   spec.ip,
+	}
+	return newVm
+}
+
+func (v *vm) markAsTemplate() bool {
+	return true
+}

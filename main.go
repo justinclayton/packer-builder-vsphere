@@ -24,20 +24,20 @@ type customizationSpec struct {
 	dns2    string
 }
 
-func login(a auth) (handle VimSession) {
+func login(a auth) (vim VimSession) {
 
-	handle.hostUrl = a.HostUrl
+	vim.hostUrl = a.HostUrl
 	t := template.Must(template.New("Login").Parse(LoginTemplate))
 	message := applyTemplate(t, a)
 	// disable strict ssl checking
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 	}
-	handle.httpClient = http.Client{Transport: tr}
+	vim.httpClient = http.Client{Transport: tr}
 	request, _ := http.NewRequest("POST",
-		handle.hostUrl, bytes.NewBufferString(message))
+		vim.hostUrl, bytes.NewBufferString(message))
 	// send request
-	response, err := handle.httpClient.Do(request)
+	response, err := vim.httpClient.Do(request)
 	defer response.Body.Close()
 
 	if err != nil {
@@ -49,9 +49,9 @@ func login(a auth) (handle VimSession) {
 	}
 
 	// assuming cookies[] count is 1
-	handle.cookie = (response.Cookies()[0].Raw)
+	vim.cookie = (response.Cookies()[0].Raw)
 
-	return handle
+	return vim
 }
 
 func tellPackerProvisionersToRun(ip string) bool {
@@ -76,10 +76,10 @@ func main() {
 	spec := customizationSpec{
 		ip: "1.2.3.4",
 	}
-	vm := vc.deployVM(templateVm, spec)
-	_ = tellPackerProvisionersToRun(vm.Ip)
-	ok := vc.markAsTemplate(vm)
+	newVm := templateVm.deployVM(spec)
+	_ = tellPackerProvisionersToRun(newVm.Ip)
+	ok := newVm.markAsTemplate()
 	if ok {
-		// println("you did it")
+		println("you did it")
 	}
 }
