@@ -1,7 +1,8 @@
-package main
+package vsphere
 
 import (
 	"bytes"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -14,6 +15,46 @@ type VimSession struct {
 	hostUrl    string
 	httpClient http.Client
 	cookie     string
+}
+
+func NewVimSession(user, pass, hosturl string) (vim VimSession) {
+
+	auth := struct {
+		Username string
+		Password string
+		HostUrl  string
+	}{
+		user,
+		pass,
+		hosturl,
+	}
+
+	vim.hostUrl = auth.HostUrl
+	t := template.Must(template.New("Login").Parse(LoginTemplate))
+	message := applyTemplate(t, auth)
+	// disable strict ssl checking
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	vim.httpClient = http.Client{Transport: tr}
+	request, _ := http.NewRequest("POST",
+		vim.hostUrl, bytes.NewBufferString(message))
+	// send request
+	response, err := vim.httpClient.Do(request)
+	defer response.Body.Close()
+
+	if err != nil {
+		println(err.Error())
+	}
+
+	if response.StatusCode != 200 {
+		fmt.Errorf("Bad status code [%d] [%s]", response.StatusCode, response.Status)
+	}
+
+	// assuming cookies[] count is 1
+	vim.cookie = (response.Cookies()[0].Raw)
+
+	return vim
 }
 
 func (vim *VimSession) sendRequest(t *template.Template, data interface{}) (*http.Response, error) {
@@ -30,9 +71,9 @@ func (vim *VimSession) sendRequest(t *template.Template, data interface{}) (*htt
 	return vim.httpClient.Do(request)
 }
 
-func (vim *VimSession) getVmTemplate(inventoryPath string) vm {
+func (vim *VimSession) GetVmTemplate(inventoryPath string) Vm {
 	// searchIndex.FindByInventoryPath(:inventoryPath => path)
-	v, _ := vim.findByInventoryPath(inventoryPath)
+	v, _ := vim.FindByInventoryPath(inventoryPath)
 
 	props := append(make([]string, 0), "name", "parent")
 
@@ -43,7 +84,7 @@ func (vim *VimSession) getVmTemplate(inventoryPath string) vm {
 	return v
 }
 
-func (vim *VimSession) findByInventoryPath(inventoryPath string) (vm, error) {
+func (vim *VimSession) FindByInventoryPath(inventoryPath string) (Vm, error) {
 	// searchIndex.FindByInventoryPath(:inventoryPath => path)
 	data := struct {
 		InventoryPath string
@@ -67,13 +108,18 @@ func (vim *VimSession) findByInventoryPath(inventoryPath string) (vm, error) {
 	root, _ := xmlpath.Parse(bytes.NewBuffer(body))
 	path := xmlpath.MustCompile("//*/FindByInventoryPathResponse/returnval")
 	if vmid, ok := path.String(root); ok {
-		v := vm{
+		v := Vm{
 			Vim:           *vim,
 			Id:            vmid,
 			InventoryPath: inventoryPath,
 		}
 		return v, nil
 	} else {
-		return vm{}, errors.New("Found nothing")
+		return Vm{}, errors.New("Found nothing")
 	}
+}
+
+func (vim *VimSession) DeleteVm(inventoryPath string) {
+	fmt.Printf("Would delete VM %s", inventoryPath)
+	return
 }
