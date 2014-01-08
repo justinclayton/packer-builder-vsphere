@@ -71,15 +71,22 @@ func (vim *VimSession) sendRequest(t *template.Template, data interface{}) (*htt
 	return vim.httpClient.Do(request)
 }
 
-func (vim *VimSession) GetVmTemplate(inventoryPath string) Vm {
-	// searchIndex.FindByInventoryPath(:inventoryPath => path)
-	v, _ := vim.FindByInventoryPath(inventoryPath)
-
-	props := append(make([]string, 0), "name", "parent")
-
+func (vim *VimSession) NewVm(vmId string) Vm {
+	v := Vm{
+		Vim: *vim,
+		Id:  vmId,
+	}
+	props := append(make([]string, 0), "name", "parent", "resourcePool")
 	propValues := v.retrieveProperties(props)
 	v.Name = propValues["name"]
 	v.Parent = propValues["parent"]
+	v.ResourcePool = propValues["resourcePool"]
+	return v
+}
+
+func (vim *VimSession) GetVmTemplate(inventoryPath string) Vm {
+	// searchIndex.FindByInventoryPath(:inventoryPath => path)
+	v, _ := vim.FindByInventoryPath(inventoryPath)
 
 	return v
 }
@@ -107,12 +114,8 @@ func (vim *VimSession) FindByInventoryPath(inventoryPath string) (Vm, error) {
 	body, _ := ioutil.ReadAll(response.Body)
 	root, _ := xmlpath.Parse(bytes.NewBuffer(body))
 	path := xmlpath.MustCompile("//*/FindByInventoryPathResponse/returnval")
-	if vmid, ok := path.String(root); ok {
-		v := Vm{
-			Vim:           *vim,
-			Id:            vmid,
-			InventoryPath: inventoryPath,
-		}
+	if vmId, ok := path.String(root); ok {
+		v := vim.NewVm(vmId)
 		return v, nil
 	} else {
 		return Vm{}, errors.New("Found nothing")

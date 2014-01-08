@@ -24,7 +24,7 @@ func RunStandalone(user, pass, hosturl, pathToSourceVm string) {
 	fmt.Printf("'%s' created.\n", newVm.Name)
 
 	fmt.Printf("Marking new VM '%s' as template...", newVm.Name)
-	_ = newVm.MarkAsTemplate()
+	// _ = newVm.MarkAsTemplate()
 	fmt.Printf("done.\n")
 
 }

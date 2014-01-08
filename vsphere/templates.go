@@ -67,13 +67,13 @@ const CloneVMTaskRequestTemplate = `
 <env:Envelope xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:env="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <env:Body>
     <CloneVM_Task xmlns="urn:vim25">
-      <_this type="VirtualMachine">vm-58499</_this>
+      <_this type="VirtualMachine">{{.SourceVmId}}</_this>
       <folder type="Folder">{{.Folder}}</folder>
       <name>{{.Name}}</name>
       <spec xsi:type="VirtualMachineCloneSpec">
         <location xsi:type="VirtualMachineRelocateSpec"></location>
-        <template>1</template>
-        <powerOn>0</powerOn>
+        <template>0</template>
+        <powerOn>1</powerOn>
       </spec>
       </CloneVM_Task>
     </env:Body>
