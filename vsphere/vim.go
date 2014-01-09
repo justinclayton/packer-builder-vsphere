@@ -76,16 +76,11 @@ func (vim *VimSession) NewVm(vmId string) Vm {
 		Vim: *vim,
 		Id:  vmId,
 	}
-	props := append(make([]string, 0), "name", "parent", "resourcePool")
-	propValues := v.retrieveProperties(props)
-	v.Name = propValues["name"]
-	v.Parent = propValues["parent"]
-	v.ResourcePool = propValues["resourcePool"]
+	v.retrieveProperties()
 	return v
 }
 
 func (vim *VimSession) GetVmTemplate(inventoryPath string) Vm {
-	// searchIndex.FindByInventoryPath(:inventoryPath => path)
 	v, _ := vim.FindByInventoryPath(inventoryPath)
 
 	return v

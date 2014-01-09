@@ -2,6 +2,7 @@ package vsphere
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"launchpad.net/xmlpath"
@@ -19,13 +20,17 @@ type Task struct {
 func (t *Task) WaitForCompletion() (result string, err error) {
 	for {
 		state, progress, result, err := t.GetState()
-		// fmt.Printf("\nlooping: state is '%s' and progress is '%s'\n", state, progress)
 		if err != nil {
+			return "", err
+		}
+		if state == "error" {
+			err = errors.New("GOT AN ERROR HERE")
 			return "", err
 		}
 		if state == "success" {
 			return result, nil
 		}
+		fmt.Printf("Task %s: %s percent\n", state, progress)
 		time.Sleep(2 * time.Second)
 	}
 }

@@ -7,7 +7,10 @@ import (
 	"launchpad.net/xmlpath"
 	"strings"
 	"text/template"
+	"time"
 )
+
+const waitForIpTimeoutInSeconds = 300
 
 type Vm struct {
 	Vim           VimSession
@@ -29,7 +32,7 @@ type CustomizationSpec struct {
 	Dns2    string
 }
 
-func parsePropertyValue(propVal string, root *xmlpath.Node) string {
+func parseVmPropertyValue(propVal string, root *xmlpath.Node) string {
 	pathString := strings.Join([]string{"//*/RetrievePropertiesResponse/returnval/propSet[name='", propVal, "']/val"}, "")
 	path := xmlpath.MustCompile(pathString)
 	if value, ok := path.String(root); ok {
@@ -39,7 +42,9 @@ func parsePropertyValue(propVal string, root *xmlpath.Node) string {
 	}
 }
 
-func (v *Vm) retrieveProperties(props []string) map[string]string {
+func (v *Vm) retrieveProperties() {
+	props := append(make([]string, 0), "name", "parent", "resourcePool", "guest")
+
 	data := struct {
 		VmId       string
 		Properties []string
@@ -61,20 +66,27 @@ func (v *Vm) retrieveProperties(props []string) map[string]string {
 	}
 
 	body, _ := ioutil.ReadAll(response.Body)
-	// fmt.Println("BEGIN RESPONSE BODY")
-	// fmt.Println(string(body))
-	// fmt.Println("END RESPONSE BODY")
 	root, _ := xmlpath.Parse(bytes.NewBuffer(body))
-	// path := xmlpath.MustCompile("//*/RetrievePropertiesResponse/returnval/propSet")
 
 	values := make(map[string]string)
 	for _, prop := range props {
-		values[prop] = parsePropertyValue(prop, root)
+		values[prop] = parseVmPropertyValue(prop, root)
 	}
-	return values
-	// v.Name = parsePropertyValue("name", root)
-	// v.Parent = parsePropertyValue("parent", root)
-	// return nil, errors.New("Found nothing")
+	v.Name = values["name"]
+	v.Parent = values["parent"]
+	v.ResourcePool = values["resourcePool"]
+
+	v.Ip = parseIpProperty(root)
+	return
+}
+
+func parseIpProperty(root *xmlpath.Node) string {
+	path := xmlpath.MustCompile("//*/RetrievePropertiesResponse/returnval/propSet[name='guest']/val/ipAddress")
+	if value, ok := path.String(root); ok {
+		return value
+	} else {
+		return ""
+	}
 }
 
 func (v *Vm) DeployVM(newVmName string, spec CustomizationSpec) (newVm Vm) {
@@ -113,7 +125,16 @@ func (v *Vm) DeployVM(newVmName string, spec CustomizationSpec) (newVm Vm) {
 			fmt.Println(err.Error())
 		}
 		newVm := v.Vim.NewVm(newVmId)
-		return newVm
+
+		for i := 0; i < waitForIpTimeoutInSeconds; i = i + 10 {
+			newVm.retrieveProperties()
+			if newVm.Ip != "" {
+				fmt.Printf("New VM '%s' has IP '%s'\n", newVm.Name, newVm.Ip)
+				return newVm
+			}
+			fmt.Printf("New VM '%s' has no IP yet, retrying in 10 seconds...\n")
+			time.Sleep(10 * time.Second)
+		}
 	} else {
 		fmt.Println("failed to get proper response back from clonevm!")
 	}
