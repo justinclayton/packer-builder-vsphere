@@ -2,6 +2,7 @@ package vsphere
 
 import (
 	"errors"
+	"fmt"
 	"github.com/mitchellh/packer/common"
 	"github.com/mitchellh/packer/packer"
 )
@@ -16,14 +17,16 @@ type Config struct {
 	VspherePassword string `mapstructure:"vsphere_password"`
 	VsphereHostUrl  string `mapstructure:"vsphere_hosturl"`
 	SourceVmPath    string `mapstructure:"source_vm_path"`
+	VmName          string `mapstructure:"vm_name"`
+	Passphrase      string `mapstructure:"passphrase"`
 	PrivateKeyFile  string `mapstructure:"private_key_file"`
 	SSHUsername     string `mapstructure:"ssh_username"`
 	SSHPort         uint   `mapstructure:"ssh_port"`
 	RawSSHTimeout   string `mapstructure:"ssh_timeout"`
 	RawStateTimeout string `mapstructure:"state_timeout"`
 
-	vmName string
-	tpl    *packer.ConfigTemplate
+	privateKeyBytes []byte
+	tpl             *packer.ConfigTemplate
 }
 
 func NewConfig(raws ...interface{}) (*Config, []string, error) {
@@ -40,7 +43,7 @@ func NewConfig(raws ...interface{}) (*Config, []string, error) {
 
 	errs := common.CheckUnusedConfig(md)
 
-	// Set defaults.
+	// // Set defaults.
 	if c.RawSSHTimeout == "" {
 		c.RawSSHTimeout = "5m"
 	}
@@ -71,9 +74,17 @@ func NewConfig(raws ...interface{}) (*Config, []string, error) {
 		errs = packer.MultiErrorAppend(
 			errs, errors.New("a source_vm_path must be specified"))
 	}
-	if c.PrivateKeyFile == "" {
+	if c.VmName == "" {
 		errs = packer.MultiErrorAppend(
-			errs, errors.New("a private_key_file must be specified"))
+			errs, errors.New("a vm_name must be specified"))
+	}
+	if c.PrivateKeyFile != "" {
+		// Load the private key.
+		c.privateKeyBytes, err = processPrivateKeyFile(c.PrivateKeyFile, c.Passphrase)
+		if err != nil {
+			errs = packer.MultiErrorAppend(
+				errs, fmt.Errorf("Failed loading private key file: %s", err))
+		}
 	}
 
 	if errs != nil && len(errs.Errors) > 0 {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"launchpad.net/xmlpath"
+	"log"
 	"net/http"
 	"text/template"
 )
@@ -18,7 +19,6 @@ type VimSession struct {
 }
 
 func NewVimSession(user, pass, hosturl string) (vim VimSession) {
-
 	auth := struct {
 		Username string
 		Password string
@@ -40,7 +40,9 @@ func NewVimSession(user, pass, hosturl string) (vim VimSession) {
 	request, _ := http.NewRequest("POST",
 		vim.hostUrl, bytes.NewBufferString(message))
 	// send request
+	log.Println("About to submit login request to vSphere")
 	response, err := vim.httpClient.Do(request)
+	log.Println("Got a response back from vSphere")
 	defer response.Body.Close()
 
 	if err != nil {

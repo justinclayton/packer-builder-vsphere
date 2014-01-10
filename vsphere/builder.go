@@ -1,14 +1,15 @@
 package vsphere
 
 import (
+	"log"
+	"time"
+
 	"github.com/mitchellh/multistep"
 	"github.com/mitchellh/packer/common"
 	"github.com/mitchellh/packer/packer"
-	"log"
-	// "time"
 )
 
-const BuilderId = "justinclayton.vsphere"
+const BuilderId = "packer.vsphere"
 
 type Builder struct {
 	config *Config
@@ -30,13 +31,21 @@ func (b *Builder) Prepare(raws ...interface{}) ([]string, error) {
 // representing the path to the newly created template VM.
 func (b *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packer.Artifact, error) {
 
+	user := b.config.VsphereUsername
+	pass := b.config.VspherePassword
+	hosturl := b.config.VsphereHostUrl
 	// Login to vSphere.
+	log.Println("---------------------------------------------------------------------------------------------------")
+	log.Println("vsphere.Builder.Run: Getting ready to connect to vSphere")
+	log.Printf("username: '%s', password: '%s', hosturl: '%s'\n", user, pass, hosturl)
+	log.Println("---------------------------------------------------------------------------------------------------")
 	vim := NewVimSession(b.config.VsphereUsername, b.config.VspherePassword, b.config.VsphereHostUrl)
+	log.Printf("Connected! Proof is in the cookie: '%s'\n", vim.cookie)
 
 	// Set up the state.
 	state := new(multistep.BasicStateBag)
 	state.Put("config", b.config)
-	state.Put("vim", vim)
+	state.Put("vim", &vim)
 	state.Put("hook", hook)
 	state.Put("ui", ui)
 
@@ -44,12 +53,12 @@ func (b *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packe
 	steps := []multistep.Step{
 		new(StepGetSourceVmInfo),
 		new(StepDeployNewVm),
-		// &common.StepConnectSSH{
-		// 	SSHAddress:     sshAddress(),
-		// 	SSHConfig:      sshConfig(),
-		// 	SSHWaitTimeout: 5 * time.Minute,
-		// },
-		// new(common.StepProvision),
+		&common.StepConnectSSH{
+			SSHAddress:     sshAddress,
+			SSHConfig:      sshConfig,
+			SSHWaitTimeout: 5 * time.Minute,
+		},
+		new(common.StepProvision),
 		new(StepMarkVmAsTemplate),
 	}
 

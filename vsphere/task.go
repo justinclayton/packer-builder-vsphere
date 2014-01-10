@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"launchpad.net/xmlpath"
+	"log"
 	"strings"
 	"text/template"
 	"time"
@@ -30,7 +31,7 @@ func (t *Task) WaitForCompletion() (result string, err error) {
 		if state == "success" {
 			return result, nil
 		}
-		fmt.Printf("Task %s: %s percent\n", state, progress)
+		log.Printf("Task %s: %s percent\n", state, progress)
 		time.Sleep(2 * time.Second)
 	}
 }

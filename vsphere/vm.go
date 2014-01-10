@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"launchpad.net/xmlpath"
+	"log"
 	"strings"
 	"text/template"
 	"time"
@@ -89,7 +90,7 @@ func parseIpProperty(root *xmlpath.Node) string {
 	}
 }
 
-func (v *Vm) DeployVM(newVmName string, spec CustomizationSpec) (newVm Vm) {
+func (v *Vm) DeployVM(newVmName string) (newVm Vm) {
 
 	// Use empty relocate spec in go template, no need to create type
 	// Be sure to set template to true to avoid having to find and set resource pool for new vm
@@ -129,14 +130,14 @@ func (v *Vm) DeployVM(newVmName string, spec CustomizationSpec) (newVm Vm) {
 		for i := 0; i < waitForIpTimeoutInSeconds; i = i + 10 {
 			newVm.retrieveProperties()
 			if newVm.Ip != "" {
-				fmt.Printf("New VM '%s' has IP '%s'\n", newVm.Name, newVm.Ip)
+				log.Printf("New VM '%s' has IP '%s'\n", newVm.Name, newVm.Ip)
 				return newVm
 			}
-			fmt.Printf("New VM '%s' has no IP yet, retrying in 10 seconds...\n")
+			log.Printf("New VM '%s' has no IP yet, retrying in 10 seconds...\n", newVm.Name)
 			time.Sleep(10 * time.Second)
 		}
 	} else {
-		fmt.Println("failed to get proper response back from clonevm!")
+		log.Println("failed to get proper response back from clonevm!")
 	}
 	return newVm
 }

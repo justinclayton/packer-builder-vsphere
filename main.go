@@ -1,20 +1,23 @@
 package main
 
 import (
-	// "github.com/mitchellh/packer"
-	// "github.com/mitchellh/packer/plugin"
+	"github.com/justinclayton/packer-builder-vsphere/vsphere"
+	"github.com/mitchellh/packer/packer/plugin"
 	"os"
 )
 
 func main() {
-
 	// If we were called with no arguments, we
 	// assume packer is invoking us as a plugin
 	args := os.Args[1:]
 	if len(args) == 0 {
-		// plugin.ServeBuilder(new(Builder))
-		panic("BEHAVE AS A PLUGIN HERE")
-		return
+		server, err := plugin.Server() // THE ERROR IS HAPPENING HERE
+		if err != nil {
+			panic(err)
+		}
+		// log.Println("'IM NOT DEAD YET', he said to stderr")
+		server.RegisterBuilder(new(vsphere.Builder))
+		server.Serve()
 	}
 
 	//// Otherwise we march onward!
@@ -25,29 +28,3 @@ func main() {
 
 	RunStandalone(user, pass, hosturl, pathToSourceVm)
 }
-
-// // SOLO USAGE: ./packer-communicator-winrm cmd -user vagrant -pass vagrant command-text
-// // set WINRM_DEBUG=1 for more output
-
-// func main() {
-//
-
-//         Run(&cmd{
-//                 Handle: func(user, pass, command string) {
-//                         communicator := &Communicator{endpoint, user, pass}
-//                         rc := &packer.RemoteCmd{
-//                                 Command: command,
-//                                 Stdout:  os.Stdout,
-//                                 Stderr:  os.Stderr,
-//                         }
-
-//                         err := communicator.Start(rc)
-//                         if err != nil {
-//                                 log.Printf("unable to run command: %s", err)
-//                                 return
-//                         }
-
-//                         rc.Wait()
-//                 },
-//         })
-// }

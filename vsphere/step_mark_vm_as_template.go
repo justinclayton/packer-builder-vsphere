@@ -10,10 +10,6 @@ import (
 type StepMarkVmAsTemplate struct{}
 
 func (s *StepMarkVmAsTemplate) Run(state multistep.StateBag) multistep.StepAction {
-
-	dummyTemplatePath := "/MyDatacenter/vm/MyTemplatesFolder/MyNewTemplate"
-
-	state.Put("template_path", dummyTemplatePath)
 	return multistep.ActionContinue
 }
 

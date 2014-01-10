@@ -17,10 +17,7 @@ func RunStandalone(user, pass, hosturl, pathToSourceVm string) {
 
 	newVmName := "packer_vsphere_builder_test_vm"
 	fmt.Printf("Creating new VM '%s'...", newVmName)
-	spec := vsphere.CustomizationSpec{
-		Ip: "1.2.3.4",
-	}
-	newVm := sourceVm.DeployVM(newVmName, spec)
+	newVm := sourceVm.DeployVM(newVmName)
 	fmt.Printf("'%s' created.\n", newVm.Name)
 
 	fmt.Printf("Marking new VM '%s' as template...", newVm.Name)
