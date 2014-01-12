@@ -17,7 +17,8 @@ func (s *StepDeployNewVm) Run(state multistep.StateBag) multistep.StepAction {
 	newVm := sourceVm.DeployVM(config.VmName)
 	// log.Println("DeployVM returned!")
 
-	state.Put("new_vm_ip", newVm.Ip)
+	state.Put("new_vm", &newVm)
+	// state.Put("new_vm_ip", newVm.Ip)
 
 	log.Println("End DeployNewVm Step")
 	return multistep.ActionContinue

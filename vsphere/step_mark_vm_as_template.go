@@ -10,6 +10,8 @@ import (
 type StepMarkVmAsTemplate struct{}
 
 func (s *StepMarkVmAsTemplate) Run(state multistep.StateBag) multistep.StepAction {
+	newVm := state.Get("new_vm").(*Vm)
+	newVm.MarkAsTemplate()
 	return multistep.ActionContinue
 }
 

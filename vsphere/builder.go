@@ -60,6 +60,7 @@ func (b *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packe
 		},
 		new(common.StepProvision),
 		new(StepMarkVmAsTemplate),
+		new(StepGetTemplatePath),
 	}
 
 	// Run the steps.
@@ -72,16 +73,6 @@ func (b *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packe
 		b.runner = &multistep.BasicRunner{Steps: steps}
 	}
 	b.runner.Run(state)
-
-	// Report any errors.
-	//// XXX: "image_name" is a GCE thing. Figure out what it means for you
-	if rawErr, ok := state.GetOk("error"); ok {
-		return nil, rawErr.(error)
-	}
-	if _, ok := state.GetOk("image_name"); !ok {
-		log.Println("Failed to find image_name in state. Bug?")
-		return nil, nil
-	}
 
 	artifact := &Artifact{
 		templatePath: state.Get("template_path").(string),
