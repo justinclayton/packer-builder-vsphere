@@ -12,12 +12,12 @@ func RunStandalone(user, pass, hosturl, pathToSourceVm string) {
 	fmt.Printf("done.\n")
 
 	fmt.Printf("Looking for VM '%s'...", pathToSourceVm)
-	sourceVm := vc.GetVmTemplate(pathToSourceVm)
+	sourceVm, _ := vc.FindByInventoryPath(pathToSourceVm)
 	fmt.Printf("found source VM '%s'\n", sourceVm.Name)
 
 	newVmName := "packer_vsphere_builder_test_vm"
 	fmt.Printf("Creating new VM '%s'...", newVmName)
-	newVm := sourceVm.DeployVM(newVmName)
+	newVm, _ := sourceVm.DeployVM(newVmName)
 	fmt.Printf("'%s' created.\n", newVm.Name)
 
 	fmt.Printf("Marking new VM '%s' as template...", newVm.Name)

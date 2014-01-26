@@ -3,7 +3,6 @@ package vsphere
 import (
 	"bytes"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"launchpad.net/xmlpath"
@@ -59,7 +58,7 @@ func NewVimSession(user, pass, hosturl string) (vim VimSession) {
 	return vim
 }
 
-func (vim *VimSession) sendRequest(t *template.Template, data interface{}) (*http.Response, error) {
+func (vim *VimSession) sendRequest(t *template.Template, data interface{}) (response *http.Response, err error) {
 	message := applyTemplate(t, data)
 
 	// println(message)
@@ -70,22 +69,27 @@ func (vim *VimSession) sendRequest(t *template.Template, data interface{}) (*htt
 	}
 
 	// send request
-	return vim.httpClient.Do(request)
+	response, err = vim.httpClient.Do(request)
+	defer response.Body.Close()
+
+	if response.StatusCode != 200 {
+		err = fmt.Errorf("Bad status code [%d] [%s]\n", response.StatusCode, response.Status)
+		return
+	}
+	return
 }
 
-func (vim *VimSession) NewVm(vmId string) Vm {
+func (vim *VimSession) NewVm(vmId string) (Vm, error) {
 	v := Vm{
 		Vim: *vim,
 		Id:  vmId,
 	}
-	v.retrieveProperties()
-	return v
-}
-
-func (vim *VimSession) GetVmTemplate(inventoryPath string) Vm {
-	v, _ := vim.FindByInventoryPath(inventoryPath)
-
-	return v
+	err := v.retrieveProperties()
+	if err != nil {
+		err := fmt.Errorf("Failed to retrieve properties for '%s' VM: %s", v.Name, err)
+		return v, err
+	}
+	return v, err
 }
 
 func (vim *VimSession) FindByInventoryPath(inventoryPath string) (Vm, error) {
@@ -98,24 +102,20 @@ func (vim *VimSession) FindByInventoryPath(inventoryPath string) (Vm, error) {
 	t := template.Must(template.New("FindByInventoryPath").Parse(FindByInventoryPathRequestTemplate))
 
 	response, err := vim.sendRequest(t, data)
-	defer response.Body.Close()
-
 	if err != nil {
-		fmt.Println(err.Error())
-	}
-
-	if response.StatusCode != 200 {
-		fmt.Printf("Bad status code [%d] [%s]\n", response.StatusCode, response.Status)
+		err = fmt.Errorf("Error sending request: '%s'", err.Error())
+		return Vm{}, err
 	}
 
 	body, _ := ioutil.ReadAll(response.Body)
 	root, _ := xmlpath.Parse(bytes.NewBuffer(body))
 	path := xmlpath.MustCompile("//*/FindByInventoryPathResponse/returnval")
 	if vmId, ok := path.String(root); ok {
-		v := vim.NewVm(vmId)
-		return v, nil
+		v, err := vim.NewVm(vmId)
+		return v, err
 	} else {
-		return Vm{}, errors.New("Found nothing")
+		err := fmt.Errorf("Found nothing", nil)
+		return Vm{}, err
 	}
 }
 

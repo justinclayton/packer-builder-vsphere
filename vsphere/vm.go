@@ -43,7 +43,7 @@ func parseVmPropertyValue(propVal string, root *xmlpath.Node) string {
 	}
 }
 
-func (v *Vm) retrieveProperties() {
+func (v *Vm) retrieveProperties() error {
 	props := append(make([]string, 0), "name", "parent", "resourcePool", "guest")
 
 	data := struct {
@@ -56,14 +56,9 @@ func (v *Vm) retrieveProperties() {
 	t := template.Must(template.New("RetrieveProperties").Parse(RetrievePropertiesRequestTemplate))
 
 	response, err := v.Vim.sendRequest(t, data)
-	defer response.Body.Close()
-
 	if err != nil {
-		fmt.Println(err.Error())
-	}
-
-	if response.StatusCode != 200 {
-		fmt.Printf("Bad status code [%d] [%s]\n", response.StatusCode, response.Status)
+		err = fmt.Errorf("Error sending request: '%s'", err.Error())
+		return err
 	}
 
 	body, _ := ioutil.ReadAll(response.Body)
@@ -77,8 +72,9 @@ func (v *Vm) retrieveProperties() {
 	v.Parent = values["parent"]
 	v.ResourcePool = values["resourcePool"]
 
+	// uses guest property collected in the request
 	v.Ip = parseIpProperty(root)
-	return
+	return nil
 }
 
 func parseIpProperty(root *xmlpath.Node) string {
@@ -90,10 +86,7 @@ func parseIpProperty(root *xmlpath.Node) string {
 	}
 }
 
-func (v *Vm) DeployVM(newVmName string) (newVm Vm) {
-
-	// Use empty relocate spec in go template, no need to create type
-	// Be sure to set template to true to avoid having to find and set resource pool for new vm
+func (v *Vm) DeployVM(newVmName string) (newVm Vm, err error) {
 
 	data := struct {
 		SourceVmId string
@@ -106,14 +99,9 @@ func (v *Vm) DeployVM(newVmName string) (newVm Vm) {
 	}
 	tmpl := template.Must(template.New("CloneVMTask").Parse(CloneVMTaskRequestTemplate))
 	response, err := v.Vim.sendRequest(tmpl, data)
-	defer response.Body.Close()
-
 	if err != nil {
-		fmt.Println(err.Error())
-	}
-
-	if response.StatusCode != 200 {
-		fmt.Printf("Bad status code [%d] [%s]\n", response.StatusCode, response.Status)
+		err = fmt.Errorf("Error sending request: '%s'", err.Error())
+		return
 	}
 
 	body, _ := ioutil.ReadAll(response.Body)
@@ -123,23 +111,48 @@ func (v *Vm) DeployVM(newVmName string) (newVm Vm) {
 		tsk := Task{Id: taskId, Vim: v.Vim}
 		newVmId, err := tsk.WaitForCompletion()
 		if err != nil {
-			fmt.Println(err.Error())
+			err = fmt.Errorf("Error waiting for task to complete: '%s'", err.Error())
+			return newVm, err
 		}
-		newVm := v.Vim.NewVm(newVmId)
+		newVm, err = v.Vim.NewVm(newVmId)
+		if err != nil {
+			err = fmt.Errorf("Error creating new VM: '%s'", err.Error())
+			return newVm, err
+		}
 
-		for i := 0; i < waitForIpTimeoutInSeconds; i = i + 10 {
-			newVm.retrieveProperties()
-			if newVm.Ip != "" {
-				log.Printf("New VM '%s' has IP '%s'\n", newVm.Name, newVm.Ip)
-				return newVm
-			}
-			log.Printf("New VM '%s' has no IP yet, retrying in 10 seconds...\n", newVm.Name)
-			time.Sleep(10 * time.Second)
+		c := make(chan error, 1)
+		go newVm.waitForIp(c)
+
+		select {
+		case err := <-c:
+			return newVm, err
+		case <-time.After(waitForIpTimeoutInSeconds * time.Second):
+			err := fmt.Errorf("timed out waiting for '%s' to get an IP", newVm.Name)
+			return newVm, err
 		}
 	} else {
+
 		log.Println("failed to get proper response back from clonevm!")
 	}
-	return newVm
+	return newVm, err
+}
+
+func (v *Vm) waitForIp(c chan<- error) {
+	for {
+		err := v.retrieveProperties()
+		if err != nil {
+			c <- err
+			return
+		}
+		if v.Ip != "" {
+			log.Printf("New VM '%s' has IP '%s'\n", v.Name, v.Ip)
+			c <- nil
+			return
+		}
+
+		log.Printf("New VM '%s' has no IP yet, retrying in 10 seconds...\n", v.Name)
+		time.Sleep(10 * time.Second)
+	}
 }
 
 func (v *Vm) MarkAsTemplate() bool {

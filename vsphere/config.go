@@ -78,7 +78,10 @@ func NewConfig(raws ...interface{}) (*Config, []string, error) {
 		errs = packer.MultiErrorAppend(
 			errs, errors.New("a vm_name must be specified"))
 	}
-	if c.PrivateKeyFile != "" {
+	if c.PrivateKeyFile == "" {
+		errs = packer.MultiErrorAppend(
+			errs, errors.New("a private_key_file"))
+	} else {
 		// Load the private key.
 		c.privateKeyBytes, err = processPrivateKeyFile(c.PrivateKeyFile, c.Passphrase)
 		if err != nil {

@@ -38,12 +38,18 @@ func (s *StepGetTemplatePath) Run(state multistep.StateBag) multistep.StepAction
 	iter := path.Iter(root)
 	values := make([]string, 0)
 
+	iter.Next() // skip top element "Datacenters"
 	for {
+		iter.Next() // skip id element
 		ok := iter.Next()
 		if ok == false {
 			break
 		} else {
-			values = append(values, iter.Node().String())
+			newVal := []string{iter.Node().String()}
+			// add new value to the beginning of the slice
+			// TODO: get rid of ids
+			// current end value: Datacenters/group-d1/Tukwila/datacenter-2/vm/group-v3/1-templates/group-v53287/Lower/group-v54541/my_new_template_that_packer_built
+			values = append(newVal, values...)
 		}
 	}
 	templatePath := strings.Join(values, "/")

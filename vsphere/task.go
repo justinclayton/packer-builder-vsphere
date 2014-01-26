@@ -2,7 +2,6 @@ package vsphere
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"launchpad.net/xmlpath"
@@ -20,12 +19,12 @@ type Task struct {
 
 func (t *Task) WaitForCompletion() (result string, err error) {
 	for {
-		state, progress, result, err := t.GetState()
+		state, progress, result, errorString, err := t.GetState()
 		if err != nil {
 			return "", err
 		}
 		if state == "error" {
-			err = errors.New("GOT AN ERROR HERE")
+			err = fmt.Errorf("Task ended with an error: '%s'", errorString)
 			return "", err
 		}
 		if state == "success" {
@@ -36,7 +35,7 @@ func (t *Task) WaitForCompletion() (result string, err error) {
 	}
 }
 
-func (t *Task) GetState() (state string, progress string, result string, err error) {
+func (t *Task) GetState() (state string, progress string, result string, errorString string, err error) {
 	data := struct {
 		TaskId string
 	}{
@@ -47,7 +46,8 @@ func (t *Task) GetState() (state string, progress string, result string, err err
 	defer response.Body.Close()
 
 	if err != nil {
-		fmt.Println(err.Error())
+		err = fmt.Errorf("Error sending Request: '%s'", err.Error())
+		return
 	}
 
 	if response.StatusCode != 200 {
@@ -63,6 +63,7 @@ func (t *Task) GetState() (state string, progress string, result string, err err
 	state = parseTaskPropertyValue("state", root)
 	progress = parseTaskPropertyValue("progress", root)
 	result = parseTaskPropertyValue("result", root)
+	errorString = parseTaskPropertyValue("error", root)
 
 	return
 

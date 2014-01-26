@@ -26,8 +26,6 @@ func sshConfig(state multistep.StateBag) (*gossh.ClientConfig, error) {
 	log.Print("Getting SSH config...")
 	config := state.Get("config").(*Config)
 	privateKey := string(config.privateKeyBytes)
-
-	log.Printf("value of privateKey is '%s'\n", privateKey)
 	keyring := new(ssh.SimpleKeychain)
 	if err := keyring.AddPEMKey(privateKey); err != nil {
 		return nil, fmt.Errorf("Error setting up SSH config: %s", err)
