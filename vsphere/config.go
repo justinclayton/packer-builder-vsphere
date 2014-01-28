@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/mitchellh/packer/common"
 	"github.com/mitchellh/packer/packer"
+	"time"
 )
 
 // Config is the configuration structure for the vsphere builder. It stores
@@ -26,6 +27,8 @@ type Config struct {
 	RawStateTimeout string `mapstructure:"state_timeout"`
 
 	privateKeyBytes []byte
+	sshTimeout      time.Duration
+	stateTimeout    time.Duration
 	tpl             *packer.ConfigTemplate
 }
 
@@ -56,6 +59,21 @@ func NewConfig(raws ...interface{}) (*Config, []string, error) {
 	if c.SSHPort == 0 {
 		c.SSHPort = 22
 	}
+
+	// Process timeout settings.
+	sshTimeout, err := time.ParseDuration(c.RawSSHTimeout)
+	if err != nil {
+		errs = packer.MultiErrorAppend(
+			errs, fmt.Errorf("Failed parsing ssh_timeout: %s", err))
+	}
+	c.sshTimeout = sshTimeout
+
+	stateTimeout, err := time.ParseDuration(c.RawStateTimeout)
+	if err != nil {
+		errs = packer.MultiErrorAppend(
+			errs, fmt.Errorf("Failed parsing state_timeout: %s", err))
+	}
+	c.stateTimeout = stateTimeout
 
 	// Process required parameters.
 	if c.VsphereUsername == "" {

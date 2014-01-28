@@ -1,61 +1,34 @@
 package vsphere
 
 import (
-	"bytes"
 	"fmt"
-	"github.com/mitchellh/multistep"
-	"io/ioutil"
-	"launchpad.net/xmlpath"
 	"log"
-	"strings"
-	"text/template"
+
+	"github.com/mitchellh/multistep"
+	"github.com/mitchellh/packer/packer"
 )
 
 type StepGetTemplatePath struct{}
 
 func (s *StepGetTemplatePath) Run(state multistep.StateBag) multistep.StepAction {
-	newVm := state.Get("new_vm").(*Vm)
-	data := struct {
-		VmId string
-	}{
-		newVm.Id,
-	}
-	tmpl := template.Must(template.New("RetrievePropertiesPathTraversal").Parse(RetrievePropertiesPathTraversalRequestTemplate))
-	response, err := newVm.Vim.sendRequest(tmpl, data)
-	defer response.Body.Close()
+	log.Println("Begin GetTemplatePath Step")
 
+	ui := state.Get("ui").(packer.Ui)
+	vim := state.Get("vim").(*VimClient)
+	newVmId := state.Get("new_vm_id").(string)
+
+	vmPath, err := vim.getVmPath(newVmId)
 	if err != nil {
-		fmt.Println(err.Error())
+		err = fmt.Errorf("Error getting path for VM: '%s'", err.Error())
+		state.Put("error", err)
+		ui.Error(err.Error())
+		return multistep.ActionHalt
 	}
 
-	if response.StatusCode != 200 {
-		fmt.Printf("Bad status code [%d] [%s]\n", response.StatusCode, response.Status)
-	}
+	ui.Message(fmt.Sprintf("New VM template's path is '%s'", vmPath))
+	state.Put("template_path", vmPath)
 
-	body, _ := ioutil.ReadAll(response.Body)
-	root, _ := xmlpath.Parse(bytes.NewBuffer(body))
-	path := xmlpath.MustCompile("//RetrievePropertiesResponse//val")
-	iter := path.Iter(root)
-	values := make([]string, 0)
-
-	iter.Next() // skip top element "Datacenters"
-	for {
-		iter.Next() // skip id element
-		ok := iter.Next()
-		if ok == false {
-			break
-		} else {
-			newVal := []string{iter.Node().String()}
-			// add new value to the beginning of the slice
-			// TODO: get rid of ids
-			// current end value: Datacenters/group-d1/Tukwila/datacenter-2/vm/group-v3/1-templates/group-v53287/Lower/group-v54541/my_new_template_that_packer_built
-			values = append(newVal, values...)
-		}
-	}
-	templatePath := strings.Join(values, "/")
-	log.Printf("New template path is '%s'", templatePath)
-	//
-	state.Put("template_path", templatePath)
+	log.Println("End GetTemplatePath Step")
 	return multistep.ActionContinue
 }
 

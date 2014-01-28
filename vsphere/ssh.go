@@ -13,7 +13,7 @@ import (
 func sshAddress(state multistep.StateBag) (string, error) {
 	log.Print("Getting SSH address...")
 	config := state.Get("config").(*Config)
-	ipAddress := state.Get("new_vm").(*Vm).Ip
+	ipAddress := state.Get("new_vm_ip").(string)
 
 	ipAndPort := fmt.Sprintf("%s:%d", ipAddress, config.SSHPort)
 

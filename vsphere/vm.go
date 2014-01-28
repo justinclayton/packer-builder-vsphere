@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"launchpad.net/xmlpath"
 	"log"
+	"net/http"
 	"strings"
 	"text/template"
 	"time"
@@ -13,28 +14,100 @@ import (
 
 const waitForIpTimeoutInSeconds = 300
 
-type Vm struct {
-	Vim           VimSession
-	Id            string
-	Name          string
-	Parent        string
-	ResourcePool  string
-	Config        string
-	InventoryPath string
-	Ip            string
+// type Vm struct {
+// 	Vim           VimClient
+// 	Id            string
+// 	Name          string
+// 	Parent        string
+// 	ResourcePool  string
+// 	Config        string
+// 	InventoryPath string
+// }
+
+func (vim *VimClient) getVmBasicInfo(vmId string) (values map[string]string, err error) {
+	// static set of what constitutes "basic info"
+	props := []string{"name", "parent", "resourcePool"}
+	response, err := vim.retrieveProperties(vmId, "name", "parent", "resourcePool")
+	if err != nil {
+		err = fmt.Errorf("Failed to get VM basic info: '%s'", err.Error())
+		return
+	}
+	values = make(map[string]string)
+
+	body, _ := ioutil.ReadAll(response.Body)
+	for _, prop := range props {
+		values[prop] = parseVmPropertyValue(prop, bytes.NewBuffer(body))
+		if values[prop] == "" {
+			err = fmt.Errorf("Failed to get value for VM property '%s'", prop)
+		}
+	}
+	return
 }
 
-type CustomizationSpec struct {
-	Name    string
-	Network string
-	Ip      string
-	Gateway string
-	Dns1    string
-	Dns2    string
+func (vim *VimClient) getVmIp(vmId string) (ip string, err error) {
+	response, err := vim.retrieveProperties(vmId, "guest")
+	if err != nil {
+		err = fmt.Errorf("Failed to get VM IP: '%s'", err.Error())
+		return
+	}
+
+	ip = parseIpProperty(response)
+	if ip == "" {
+		err = fmt.Errorf("No value for IP could be found.", nil)
+	}
+	return
 }
 
-func parseVmPropertyValue(propVal string, root *xmlpath.Node) string {
-	pathString := strings.Join([]string{"//*/RetrievePropertiesResponse/returnval/propSet[name='", propVal, "']/val"}, "")
+func (vim *VimClient) getVmPath(vmId string) (path string, err error) {
+
+	response, err := vim.retrievePropertiesPathTraversal(vmId)
+	if err != nil {
+		err = fmt.Errorf("Failed to get VM Path: '%s'", err.Error())
+		return
+	}
+
+	path = parsePathProperty(response)
+	return
+}
+
+func (vim *VimClient) retrieveProperties(vmId string, props ...string) (response *http.Response, err error) {
+
+	data := struct {
+		VmId       string
+		Properties []string
+	}{
+		vmId,
+		props,
+	}
+	t := template.Must(template.New("RetrieveProperties").Parse(RetrievePropertiesRequestTemplate))
+
+	request, _ := vim.prepareRequest(t, data)
+	response, err = vim.Do(request)
+	if err != nil {
+		err = fmt.Errorf("Error retrieving VM properties: '%s'", err.Error())
+	}
+	return
+}
+
+func (vim *VimClient) retrievePropertiesPathTraversal(vmId string) (response *http.Response, err error) {
+	data := struct {
+		VmId string
+	}{
+		vmId,
+	}
+	t := template.Must(template.New("RetrievePropertiesPathTraversal").Parse(RetrievePropertiesPathTraversalRequestTemplate))
+
+	request, _ := vim.prepareRequest(t, data)
+	response, err = vim.Do(request)
+	if err != nil {
+		err = fmt.Errorf("Error retrieving VM path properties: '%s'", err.Error())
+	}
+	return
+}
+
+func parseVmPropertyValue(prop string, body *bytes.Buffer) (value string) {
+	root, _ := xmlpath.Parse(body)
+	pathString := strings.Join([]string{"//*/RetrievePropertiesResponse/returnval/propSet[name='", prop, "']/val"}, "")
 	path := xmlpath.MustCompile(pathString)
 	if value, ok := path.String(root); ok {
 		return value
@@ -43,41 +116,10 @@ func parseVmPropertyValue(propVal string, root *xmlpath.Node) string {
 	}
 }
 
-func (v *Vm) retrieveProperties() error {
-	props := append(make([]string, 0), "name", "parent", "resourcePool", "guest")
-
-	data := struct {
-		VmId       string
-		Properties []string
-	}{
-		v.Id,
-		props,
-	}
-	t := template.Must(template.New("RetrieveProperties").Parse(RetrievePropertiesRequestTemplate))
-
-	response, err := v.Vim.sendRequest(t, data)
-	if err != nil {
-		err = fmt.Errorf("Error sending request: '%s'", err.Error())
-		return err
-	}
-
+func parseIpProperty(response *http.Response) (value string) {
 	body, _ := ioutil.ReadAll(response.Body)
 	root, _ := xmlpath.Parse(bytes.NewBuffer(body))
 
-	values := make(map[string]string)
-	for _, prop := range props {
-		values[prop] = parseVmPropertyValue(prop, root)
-	}
-	v.Name = values["name"]
-	v.Parent = values["parent"]
-	v.ResourcePool = values["resourcePool"]
-
-	// uses guest property collected in the request
-	v.Ip = parseIpProperty(root)
-	return nil
-}
-
-func parseIpProperty(root *xmlpath.Node) string {
 	path := xmlpath.MustCompile("//*/RetrievePropertiesResponse/returnval/propSet[name='guest']/val/ipAddress")
 	if value, ok := path.String(root); ok {
 		return value
@@ -86,75 +128,92 @@ func parseIpProperty(root *xmlpath.Node) string {
 	}
 }
 
-func (v *Vm) DeployVM(newVmName string) (newVm Vm, err error) {
+func parsePathProperty(response *http.Response) (value string) {
+	body, _ := ioutil.ReadAll(response.Body)
+	root, _ := xmlpath.Parse(bytes.NewBuffer(body))
+
+	path := xmlpath.MustCompile("//RetrievePropertiesResponse//val")
+	iter := path.Iter(root)
+	values := make([]string, 0)
+
+	iter.Next() // skip top element "Datacenters"
+	for {
+		iter.Next() // skip id element
+		ok := iter.Next()
+		if ok == false {
+			break
+		} else {
+			newVal := []string{iter.Node().String()}
+			// add new value to the beginning of the slice
+			// TODO: get rid of ids
+			// current end value: Datacenters/group-d1/Tukwila/datacenter-2/vm/group-v3/1-templates/group-v53287/Lower/group-v54541/my_new_template_that_packer_built
+			values = append(newVal, values...)
+		}
+	}
+	value = strings.Join(values, "/")
+	return value
+}
+
+func parseTaskIdFromResponse(response *http.Response) (value string) {
+	body, _ := ioutil.ReadAll(response.Body)
+	root, _ := xmlpath.Parse(bytes.NewBuffer(body))
+
+	path := xmlpath.MustCompile("//*/CloneVM_TaskResponse/returnval")
+	if value, ok := path.String(root); ok {
+		return value
+	} else {
+		return ""
+	}
+}
+
+// cloneVmTask() calls the CloneVM_Task vSphere API method and returns a
+// task id that can be used to track progress of the clone operation.
+func (vim *VimClient) cloneVmTask(sourceVmId, folder, name string) (taskId string, err error) {
 
 	data := struct {
 		SourceVmId string
 		Folder     string
 		Name       string
 	}{
-		v.Id,
-		v.Parent,
-		newVmName,
+		sourceVmId,
+		folder,
+		name,
 	}
-	tmpl := template.Must(template.New("CloneVMTask").Parse(CloneVMTaskRequestTemplate))
-	response, err := v.Vim.sendRequest(tmpl, data)
+
+	t := template.Must(template.New("CloneVMTask").Parse(CloneVMTaskRequestTemplate))
+
+	request, _ := vim.prepareRequest(t, data)
+	response, err := vim.Do(request)
 	if err != nil {
-		err = fmt.Errorf("Error sending request: '%s'", err.Error())
+		err = fmt.Errorf("Error calling CloneVM_Task: '%s'", err.Error())
 		return
 	}
-
-	body, _ := ioutil.ReadAll(response.Body)
-	root, _ := xmlpath.Parse(bytes.NewBuffer(body))
-	path := xmlpath.MustCompile("//*/CloneVM_TaskResponse/returnval")
-	if taskId, ok := path.String(root); ok {
-		tsk := Task{Id: taskId, Vim: v.Vim}
-		newVmId, err := tsk.WaitForCompletion()
-		if err != nil {
-			err = fmt.Errorf("Error waiting for task to complete: '%s'", err.Error())
-			return newVm, err
-		}
-		newVm, err = v.Vim.NewVm(newVmId)
-		if err != nil {
-			err = fmt.Errorf("Error creating new VM: '%s'", err.Error())
-			return newVm, err
-		}
-
-		c := make(chan error, 1)
-		go newVm.waitForIp(c)
-
-		select {
-		case err := <-c:
-			return newVm, err
-		case <-time.After(waitForIpTimeoutInSeconds * time.Second):
-			err := fmt.Errorf("timed out waiting for '%s' to get an IP", newVm.Name)
-			return newVm, err
-		}
-	} else {
-
-		log.Println("failed to get proper response back from clonevm!")
+	taskId = parseTaskIdFromResponse(response)
+	if taskId == "" {
+		err = fmt.Errorf("Error calling CloneVM_Task: COULDNT FIND TASK ID IN RESPONSE. BUG?", nil)
+		return
 	}
-	return newVm, err
+	return
 }
 
-func (v *Vm) waitForIp(c chan<- error) {
+func (vim *VimClient) waitForIp(resultCh chan<- string, errCh chan<- error, vmId string) {
 	for {
-		err := v.retrieveProperties()
+		ip, err := vim.getVmIp(vmId)
 		if err != nil {
-			c <- err
+			errCh <- err
 			return
 		}
-		if v.Ip != "" {
-			log.Printf("New VM '%s' has IP '%s'\n", v.Name, v.Ip)
-			c <- nil
+		if ip != "" {
+			log.Printf("VM has IP '%s'\n", ip)
+			resultCh <- ip
 			return
 		}
-
-		log.Printf("New VM '%s' has no IP yet, retrying in 10 seconds...\n", v.Name)
+		log.Println("No IP yet, retrying in 10 seconds...")
 		time.Sleep(10 * time.Second)
 	}
 }
 
-func (v *Vm) MarkAsTemplate() bool {
-	return true
+func (vim *VimClient) MarkAsTemplate(vmId string) (err error) {
+	err = fmt.Errorf("MarkAsTemplate() NOT IMPLEMENTED YET", nil)
+	return
 }

@@ -35,24 +35,26 @@ func (b *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packe
 	pass := b.config.VspherePassword
 	hosturl := b.config.VsphereHostUrl
 	// Login to vSphere.
-	log.Println("---------------------------------------------------------------------------------------------------")
-	log.Println("vsphere.Builder.Run: Getting ready to connect to vSphere")
+	log.Println("Connecting to vSphere...")
 	log.Printf("username: '%s', password: '%s', hosturl: '%s'\n", user, pass, hosturl)
-	log.Println("---------------------------------------------------------------------------------------------------")
-	vim := NewVimSession(b.config.VsphereUsername, b.config.VspherePassword, b.config.VsphereHostUrl)
-	log.Printf("Connected! Proof is in the cookie: '%s'\n", vim.cookie)
+	vim, err := NewVimClient(b.config.VsphereUsername, b.config.VspherePassword, b.config.VsphereHostUrl)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("Successfully connected to vSphere.")
 
 	// Set up the state.
 	state := new(multistep.BasicStateBag)
 	state.Put("config", b.config)
-	state.Put("vim", &vim)
+	state.Put("vim", vim)
 	state.Put("hook", hook)
 	state.Put("ui", ui)
 
 	// Build the steps.
 	steps := []multistep.Step{
 		new(StepGetSourceVmInfo),
-		new(StepDeployNewVm),
+		new(StepCreateNewVm),
+		new(StepGetVmSshInfo),
 		&common.StepConnectSSH{
 			SSHAddress:     sshAddress,
 			SSHConfig:      sshConfig,

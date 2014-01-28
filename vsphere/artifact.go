@@ -8,7 +8,7 @@ import (
 // Artifact represents a vSphere path to the new template as the result of a Packer build.
 type Artifact struct {
 	templatePath string
-	vim          VimSession
+	vim          *VimClient
 }
 
 // BuilderId returns the builder Id.

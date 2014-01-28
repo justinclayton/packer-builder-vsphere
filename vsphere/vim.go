@@ -11,13 +11,13 @@ import (
 	"text/template"
 )
 
-type VimSession struct {
+type VimClient struct {
 	hostUrl    string
 	httpClient http.Client
 	cookie     string
 }
 
-func NewVimSession(user, pass, hosturl string) (vim VimSession) {
+func NewVimClient(user, pass, hosturl string) (vim *VimClient, err error) {
 	auth := struct {
 		Username string
 		Password string
@@ -28,14 +28,25 @@ func NewVimSession(user, pass, hosturl string) (vim VimSession) {
 		hosturl,
 	}
 
-	vim.hostUrl = auth.HostUrl
+	vim = &VimClient{
+		hostUrl: auth.HostUrl,
+		httpClient: http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
+			},
+		},
+	}
+
+	// vim.hostUrl = auth.HostUrl
 	t := template.Must(template.New("Login").Parse(LoginTemplate))
 	message := applyTemplate(t, auth)
 	// disable strict ssl checking
-	tr := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}
-	vim.httpClient = http.Client{Transport: tr}
+	// tr := &http.Transport{
+	// 	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	// }
+	// vim.httpClient = http.Client{Transport: tr}
 	request, _ := http.NewRequest("POST",
 		vim.hostUrl, bytes.NewBufferString(message))
 	// send request
@@ -44,33 +55,38 @@ func NewVimSession(user, pass, hosturl string) (vim VimSession) {
 	log.Println("Got a response back from vSphere")
 	defer response.Body.Close()
 
-	if err != nil {
-		println(err.Error())
+	if response.StatusCode != 200 {
+		err = fmt.Errorf("Bad status code [%d] [%s]", response.StatusCode, response.Status)
 	}
 
-	if response.StatusCode != 200 {
-		fmt.Errorf("Bad status code [%d] [%s]", response.StatusCode, response.Status)
+	if err != nil {
+		err = fmt.Errorf("Error connecting to vSphere: '%s'", err.Error())
+		return
 	}
 
 	// assuming cookies[] count is 1
 	vim.cookie = (response.Cookies()[0].Raw)
 
-	return vim
+	return
 }
 
-func (vim *VimSession) sendRequest(t *template.Template, data interface{}) (response *http.Response, err error) {
+func (vim *VimClient) prepareRequest(t *template.Template, data interface{}) (request *http.Request, err error) {
 	message := applyTemplate(t, data)
 
-	// println(message)
+	request, err = http.NewRequest("POST", vim.hostUrl, bytes.NewBufferString(message))
+	if err != nil {
+		return
+	}
 
-	request, _ := http.NewRequest("POST", vim.hostUrl, bytes.NewBufferString(message))
 	if vim.cookie != "" {
 		request.Header.Add("cookie", vim.cookie)
 	}
+	return
+}
 
+func (vim *VimClient) Do(request *http.Request) (response *http.Response, err error) {
 	// send request
 	response, err = vim.httpClient.Do(request)
-	defer response.Body.Close()
 
 	if response.StatusCode != 200 {
 		err = fmt.Errorf("Bad status code [%d] [%s]\n", response.StatusCode, response.Status)
@@ -79,21 +95,7 @@ func (vim *VimSession) sendRequest(t *template.Template, data interface{}) (resp
 	return
 }
 
-func (vim *VimSession) NewVm(vmId string) (Vm, error) {
-	v := Vm{
-		Vim: *vim,
-		Id:  vmId,
-	}
-	err := v.retrieveProperties()
-	if err != nil {
-		err := fmt.Errorf("Failed to retrieve properties for '%s' VM: %s", v.Name, err)
-		return v, err
-	}
-	return v, err
-}
-
-func (vim *VimSession) FindByInventoryPath(inventoryPath string) (Vm, error) {
-	// searchIndex.FindByInventoryPath(:inventoryPath => path)
+func (vim *VimClient) FindByInventoryPath(inventoryPath string) (vmId string, err error) {
 	data := struct {
 		InventoryPath string
 	}{
@@ -101,25 +103,31 @@ func (vim *VimSession) FindByInventoryPath(inventoryPath string) (Vm, error) {
 	}
 	t := template.Must(template.New("FindByInventoryPath").Parse(FindByInventoryPathRequestTemplate))
 
-	response, err := vim.sendRequest(t, data)
-	if err != nil {
-		err = fmt.Errorf("Error sending request: '%s'", err.Error())
-		return Vm{}, err
-	}
+	log.Printf("Looking for '%s'", inventoryPath)
 
-	body, _ := ioutil.ReadAll(response.Body)
+	request, _ := vim.prepareRequest(t, data)
+	response, err := vim.Do(request)
+	// defer response.Body.Close()
+	if err != nil {
+		err = fmt.Errorf("Error calling FindByInventoryPath: '%s'", err.Error())
+		return
+	}
+	body, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		log.Printf("ERROR IN ioutil.ReadAll: '%s'", err.Error())
+	}
+	log.Printf("RESPONSE BODY BELOW:\n============\n%s\n===========\nEND RESPONSE BODY\n", string(body))
 	root, _ := xmlpath.Parse(bytes.NewBuffer(body))
 	path := xmlpath.MustCompile("//*/FindByInventoryPathResponse/returnval")
 	if vmId, ok := path.String(root); ok {
-		v, err := vim.NewVm(vmId)
-		return v, err
+		return vmId, err
 	} else {
-		err := fmt.Errorf("Found nothing", nil)
-		return Vm{}, err
+		err := fmt.Errorf("Found nothing.")
+		return vmId, err
 	}
 }
 
-func (vim *VimSession) DeleteVm(inventoryPath string) {
-	fmt.Printf("Would delete VM %s", inventoryPath)
+func (vim *VimClient) DeleteVm(inventoryPath string) (err error) {
+	err = fmt.Errorf("DeleteVm() NOT IMPLEMENTED YET")
 	return
 }
