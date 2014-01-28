@@ -12,18 +12,6 @@ import (
 	"time"
 )
 
-const waitForIpTimeoutInSeconds = 300
-
-// type Vm struct {
-// 	Vim           VimClient
-// 	Id            string
-// 	Name          string
-// 	Parent        string
-// 	ResourcePool  string
-// 	Config        string
-// 	InventoryPath string
-// }
-
 func (vim *VimClient) getVmBasicInfo(vmId string) (values map[string]string, err error) {
 	// static set of what constitutes "basic info"
 	props := []string{"name", "parent", "resourcePool"}

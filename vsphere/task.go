@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"launchpad.net/xmlpath"
 	"log"
-	"net/http"
 	"strings"
 	"text/template"
 	"time"
@@ -58,24 +57,38 @@ func (t *Task) RefreshState() (err error) {
 	request, _ := t.Vim.prepareRequest(tmpl, data)
 	response, err := t.Vim.Do(request)
 
-	t.state = parseTaskPropertyValue("state", response)
-	t.progress = parseTaskPropertyValue("progress", response)
-	t.result = parseTaskPropertyValue("result", response)
-	t.errorDesc = parseTaskPropertyValue("error", response)
+	responseBody, _ := ioutil.ReadAll(response.Body)
+
+	propValues := parseTaskPropertyValues(responseBody, "state", "progress", "result", "error")
+
+	t.state = propValues["state"]
+	log.Printf("task state is '%s'", t.state)
+	t.progress = propValues["progress"]
+	log.Printf("task progress is '%s'", t.progress)
+	t.result = propValues["result"]
+	log.Printf("task result is '%s'", t.result)
+	t.errorDesc = propValues["error"]
+	log.Printf("task errorDesc is '%s'", t.errorDesc)
 
 	return
 
 }
 
-func parseTaskPropertyValue(propVal string, response *http.Response) string {
-	body, _ := ioutil.ReadAll(response.Body)
-	root, _ := xmlpath.Parse(bytes.NewBuffer(body))
-
-	pathString := strings.Join([]string{"//*/RetrievePropertiesResponse/returnval/propSet/val/", propVal}, "")
-	path := xmlpath.MustCompile(pathString)
-	if value, ok := path.String(root); ok {
-		return value
-	} else {
-		return ""
+func parseTaskPropertyValues(body []byte, props ...string) map[string]string {
+	values := make(map[string]string)
+	log.Println(props)
+	for _, prop := range props {
+		root, _ := xmlpath.Parse(bytes.NewBuffer(body))
+		// pathString := fmt.Sprintf("//*/RetrievePropertiesResponse/returnval/propSet/val/%s", prop)
+		pathString := strings.Join([]string{"//*/RetrievePropertiesResponse/returnval/propSet/val/", prop}, "")
+		path := xmlpath.MustCompile(pathString)
+		if value, ok := path.String(root); ok {
+			// log.Printf("ok; value of '%s' is '%s'", prop, value)
+			values[prop] = value
+		} else {
+			// log.Printf("not ok; value of '%s' is '%s'", prop, value)
+			values[prop] = ""
+		}
 	}
+	return values
 }

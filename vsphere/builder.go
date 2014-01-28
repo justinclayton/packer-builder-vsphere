@@ -76,6 +76,15 @@ func (b *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packe
 	}
 	b.runner.Run(state)
 
+	// Report any errors.
+	if rawErr, ok := state.GetOk("error"); ok {
+		return nil, rawErr.(error)
+	}
+	if _, ok := state.GetOk("template_path"); !ok {
+		log.Println("Failed to find template_path in state. Bug?")
+		return nil, nil
+	}
+
 	artifact := &Artifact{
 		templatePath: state.Get("template_path").(string),
 		vim:          vim,
