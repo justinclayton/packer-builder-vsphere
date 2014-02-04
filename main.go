@@ -26,7 +26,7 @@ func main() {
 }
 
 func usage() {
-	`
+	fmt.Println(`
 ===============================================================================
 Attention! This is intended to be used as a plugin to Packer, and
 cannot be invoked as a standalone executable. To use this custom
@@ -55,5 +55,5 @@ build template that would look something like this:
 
 Please direct any questions to @justinclayton42 on Twitter, or submit
 a problem at https://github.com/justinclayton/packer-builder-vsphere/issues.
-==============================================================================`
+==============================================================================`)
 }

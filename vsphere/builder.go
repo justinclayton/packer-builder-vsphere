@@ -33,11 +33,11 @@ func (b *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packe
 
 	user := b.config.VsphereUsername
 	pass := b.config.VspherePassword
-	hosturl := b.config.VsphereHostUrl
+	hosturl := b.config.VsphereHost
 	// Login to vSphere.
 	log.Println("Connecting to vSphere...")
 	log.Printf("username: '%s', password: '%s', hosturl: '%s'\n", user, pass, hosturl)
-	vim, err := NewVimClient(b.config.VsphereUsername, b.config.VspherePassword, b.config.VsphereHostUrl)
+	vim, err := NewVimClient(b.config.VsphereUsername, b.config.VspherePassword, b.config.VsphereHost)
 	if err != nil {
 		return nil, err
 	}
