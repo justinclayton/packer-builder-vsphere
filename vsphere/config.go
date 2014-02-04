@@ -16,7 +16,7 @@ type Config struct {
 
 	VsphereUsername string `mapstructure:"vsphere_username"`
 	VspherePassword string `mapstructure:"vsphere_password"`
-	VsphereHostUrl  string `mapstructure:"vsphere_hosturl"`
+	VsphereHost     string `mapstructure:"vsphere_host"`
 	SourceVmPath    string `mapstructure:"source_vm_path"`
 	VmName          string `mapstructure:"vm_name"`
 	Passphrase      string `mapstructure:"passphrase"`
@@ -84,9 +84,9 @@ func NewConfig(raws ...interface{}) (*Config, []string, error) {
 		errs = packer.MultiErrorAppend(
 			errs, errors.New("a vsphere_password must be specified"))
 	}
-	if c.VsphereHostUrl == "" {
+	if c.VsphereHost == "" {
 		errs = packer.MultiErrorAppend(
-			errs, errors.New("a vsphere_hosturl must be specified"))
+			errs, errors.New("a vsphere_host must be specified"))
 	}
 	if c.SourceVmPath == "" {
 		errs = packer.MultiErrorAppend(

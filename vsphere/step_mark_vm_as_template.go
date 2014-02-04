@@ -11,15 +11,15 @@ import (
 type StepMarkVmAsTemplate struct{}
 
 func (s *StepMarkVmAsTemplate) Run(state multistep.StateBag) multistep.StepAction {
-	log.Println("Begin MarkVmAsTemplate Step")
+	log.Println("Begin StepMarkVmAsTemplate")
 
 	ui := state.Get("ui").(packer.Ui)
 	vim := state.Get("vim").(*VimClient)
 	newVmId := state.Get("new_vm_id").(string)
 
-	ui.Say("Converting new VM to template...")
-	if err := vim.MarkAsTemplate(newVmId); err != nil {
-		err = fmt.Errorf("Error converting VM to template: '%s'", err.Error())
+	ui.Say("Waiting for the new VM to power down...")
+	if err := vim.markAsTemplate(newVmId); err != nil {
+		err = fmt.Errorf("Error marking VM as template: '%s'", err.Error())
 		state.Put("error", err)
 		ui.Error(err.Error())
 		return multistep.ActionHalt
@@ -27,7 +27,7 @@ func (s *StepMarkVmAsTemplate) Run(state multistep.StateBag) multistep.StepActio
 
 	ui.Message("Successfully converted VM to template.")
 
-	log.Println("End MarkVmAsTemplate Step")
+	log.Println("End StepMarkVmAsTemplate")
 	return multistep.ActionContinue
 }
 

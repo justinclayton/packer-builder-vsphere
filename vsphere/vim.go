@@ -8,6 +8,7 @@ import (
 	"launchpad.net/xmlpath"
 	"log"
 	"net/http"
+	"strings"
 	"text/template"
 )
 
@@ -17,19 +18,21 @@ type VimClient struct {
 	cookie     string
 }
 
-func NewVimClient(user, pass, hosturl string) (vim *VimClient, err error) {
+func NewVimClient(user, pass, host string) (vim *VimClient, err error) {
 	auth := struct {
 		Username string
 		Password string
-		HostUrl  string
+		Host     string
 	}{
 		user,
 		pass,
-		hosturl,
+		host,
 	}
 
+	hostUrl := fmt.Sprintf("https://%s/sdk/vimService", host)
+
 	vim = &VimClient{
-		hostUrl: auth.HostUrl,
+		hostUrl: hostUrl,
 		httpClient: http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
@@ -39,14 +42,8 @@ func NewVimClient(user, pass, hosturl string) (vim *VimClient, err error) {
 		},
 	}
 
-	// vim.hostUrl = auth.HostUrl
 	t := template.Must(template.New("Login").Parse(LoginTemplate))
 	message := applyTemplate(t, auth)
-	// disable strict ssl checking
-	// tr := &http.Transport{
-	// 	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	// }
-	// vim.httpClient = http.Client{Transport: tr}
 	request, _ := http.NewRequest("POST",
 		vim.hostUrl, bytes.NewBufferString(message))
 	// send request
@@ -67,6 +64,14 @@ func NewVimClient(user, pass, hosturl string) (vim *VimClient, err error) {
 	// assuming cookies[] count is 1
 	vim.cookie = (response.Cookies()[0].Raw)
 
+	return
+}
+
+func getAssumedTemplatePath(sourceVmPath string, templateName string) (templatePath string) {
+	a := strings.Split(sourceVmPath, "/")
+	a = a[1 : len(a)-1]
+	a = append(a, templateName)
+	templatePath = strings.Join(a, "/")
 	return
 }
 
@@ -112,11 +117,8 @@ func (vim *VimClient) FindByInventoryPath(inventoryPath string) (vmId string, er
 		err = fmt.Errorf("Error calling FindByInventoryPath: '%s'", err.Error())
 		return
 	}
-	body, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		log.Printf("ERROR IN ioutil.ReadAll: '%s'", err.Error())
-	}
-	log.Printf("RESPONSE BODY BELOW:\n============\n%s\n===========\nEND RESPONSE BODY\n", string(body))
+	body, _ := ioutil.ReadAll(response.Body)
+	// log.Printf("RESPONSE BODY BELOW:\n============\n%s\n===========\nEND RESPONSE BODY\n", string(body))
 	root, _ := xmlpath.Parse(bytes.NewBuffer(body))
 	path := xmlpath.MustCompile("//*/FindByInventoryPathResponse/returnval")
 	if vmId, ok := path.String(root); ok {

@@ -61,6 +61,7 @@ func (b *Builder) Run(ui packer.Ui, hook packer.Hook, cache packer.Cache) (packe
 			SSHWaitTimeout: 5 * time.Minute,
 		},
 		new(common.StepProvision),
+		new(StepPowerDownVm),
 		new(StepMarkVmAsTemplate),
 		new(StepGetTemplatePath),
 	}

@@ -109,6 +109,26 @@ const CloneVMTaskRequestTemplate = `
 </env:Envelope>
 `
 
+const ShutdownGuestRequestTemplate = `
+<env:Envelope xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:env="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <env:Body>
+    <ShutdownGuest xmlns="urn:vim25">
+      <_this type="VirtualMachine">{{.VmId}}</_this>
+    </ShutdownGuest>
+  </env:Body>
+</env:Envelope>
+`
+
+const MarkAsTemplateRequestTemplate = `
+<env:Envelope xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:env="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <env:Body>
+    <MarkAsTemplate xmlns="urn:vim25">
+      <_this type="VirtualMachine">{{.VmId}}</_this>
+    </MarkAsTemplate>
+  </env:Body>
+</env:Envelope>
+`
+
 const TaskStatusRequestTemplate = `
 <env:Envelope xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:env="http://schemas.xmlsoap.org/soap/envelope/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <env:Body>

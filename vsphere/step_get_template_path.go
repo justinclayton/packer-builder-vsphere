@@ -14,19 +14,13 @@ func (s *StepGetTemplatePath) Run(state multistep.StateBag) multistep.StepAction
 	log.Println("Begin GetTemplatePath Step")
 
 	ui := state.Get("ui").(packer.Ui)
-	vim := state.Get("vim").(*VimClient)
-	newVmId := state.Get("new_vm_id").(string)
+	config := state.Get("config").(*Config)
 
-	vmPath, err := vim.getVmPath(newVmId)
-	if err != nil {
-		err = fmt.Errorf("Error getting path for VM: '%s'", err.Error())
-		state.Put("error", err)
-		ui.Error(err.Error())
-		return multistep.ActionHalt
-	}
+	// TODO: Stop making assumptions based on config strings (jclayton)
+	templatePath := getAssumedTemplatePath(config.SourceVmPath, config.VmName)
 
-	ui.Message(fmt.Sprintf("New VM template's path is '%s'", vmPath))
-	state.Put("template_path", vmPath)
+	ui.Message(fmt.Sprintf("New VM template's path is '%s'", templatePath))
+	state.Put("template_path", templatePath)
 
 	log.Println("End GetTemplatePath Step")
 	return multistep.ActionContinue

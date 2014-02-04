@@ -28,10 +28,11 @@ func (s *StepGetVmSshInfo) Run(state multistep.StateBag) multistep.StepAction {
 	errCh := make(chan error, 1)
 	go vim.waitForIp(resultCh, errCh, newVmId)
 
+	ui.Say("Waiting for IP to become available...")
 	select {
 	case ip := <-resultCh:
 		// Things succeeded, store VM info for later tasks
-		ui.Message("New VM created.")
+		ui.Message(fmt.Sprintf("VM is up with IP '%s'", ip))
 		state.Put("new_vm_ip", ip)
 	case err := <-errCh:
 		err = fmt.Errorf("Error retrieving IP: '%s'", err.Error())

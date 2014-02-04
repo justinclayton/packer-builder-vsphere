@@ -62,13 +62,13 @@ func (t *Task) RefreshState() (err error) {
 	propValues := parseTaskPropertyValues(responseBody, "state", "progress", "result", "error")
 
 	t.state = propValues["state"]
-	log.Printf("task state is '%s'", t.state)
+	// log.Printf("task state is '%s'", t.state)
 	t.progress = propValues["progress"]
-	log.Printf("task progress is '%s'", t.progress)
+	// log.Printf("task progress is '%s'", t.progress)
 	t.result = propValues["result"]
-	log.Printf("task result is '%s'", t.result)
+	// log.Printf("task result is '%s'", t.result)
 	t.errorDesc = propValues["error"]
-	log.Printf("task errorDesc is '%s'", t.errorDesc)
+	// log.Printf("task errorDesc is '%s'", t.errorDesc)
 
 	return
 
@@ -76,17 +76,14 @@ func (t *Task) RefreshState() (err error) {
 
 func parseTaskPropertyValues(body []byte, props ...string) map[string]string {
 	values := make(map[string]string)
-	log.Println(props)
 	for _, prop := range props {
 		root, _ := xmlpath.Parse(bytes.NewBuffer(body))
 		// pathString := fmt.Sprintf("//*/RetrievePropertiesResponse/returnval/propSet/val/%s", prop)
 		pathString := strings.Join([]string{"//*/RetrievePropertiesResponse/returnval/propSet/val/", prop}, "")
 		path := xmlpath.MustCompile(pathString)
 		if value, ok := path.String(root); ok {
-			// log.Printf("ok; value of '%s' is '%s'", prop, value)
 			values[prop] = value
 		} else {
-			// log.Printf("not ok; value of '%s' is '%s'", prop, value)
 			values[prop] = ""
 		}
 	}

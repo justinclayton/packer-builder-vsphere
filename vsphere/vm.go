@@ -39,10 +39,20 @@ func (vim *VimClient) getVmIp(vmId string) (ip string, err error) {
 		return
 	}
 
-	ip = parseIpProperty(response)
-	if ip == "" {
-		err = fmt.Errorf("No value for IP could be found.", nil)
+	body, _ := ioutil.ReadAll(response.Body)
+	ip = parseIpProperty(bytes.NewBuffer(body))
+	return
+}
+
+func (vim *VimClient) getVmPowerState(vmId string) (state string, err error) {
+	response, err := vim.retrieveProperties(vmId, "runtime")
+	if err != nil {
+		err = fmt.Errorf("Failed to get VM power state: '%s'", err.Error())
+		return
 	}
+
+	body, _ := ioutil.ReadAll(response.Body)
+	state = parseVmPowerStateProperty(bytes.NewBuffer(body))
 	return
 }
 
@@ -54,7 +64,8 @@ func (vim *VimClient) getVmPath(vmId string) (path string, err error) {
 		return
 	}
 
-	path = parsePathProperty(response)
+	body, _ := ioutil.ReadAll(response.Body)
+	path = parsePathProperty(bytes.NewBuffer(body))
 	return
 }
 
@@ -104,10 +115,8 @@ func parseVmPropertyValue(prop string, body *bytes.Buffer) (value string) {
 	}
 }
 
-func parseIpProperty(response *http.Response) (value string) {
-	body, _ := ioutil.ReadAll(response.Body)
-	root, _ := xmlpath.Parse(bytes.NewBuffer(body))
-
+func parseIpProperty(body *bytes.Buffer) (value string) {
+	root, _ := xmlpath.Parse(bytes.NewBuffer(body.Bytes()))
 	path := xmlpath.MustCompile("//*/RetrievePropertiesResponse/returnval/propSet[name='guest']/val/ipAddress")
 	if value, ok := path.String(root); ok {
 		return value
@@ -116,17 +125,26 @@ func parseIpProperty(response *http.Response) (value string) {
 	}
 }
 
-func parsePathProperty(response *http.Response) (value string) {
-	body, _ := ioutil.ReadAll(response.Body)
-	root, _ := xmlpath.Parse(bytes.NewBuffer(body))
+func parseVmPowerStateProperty(body *bytes.Buffer) (value string) {
+	root, _ := xmlpath.Parse(bytes.NewBuffer(body.Bytes()))
+	path := xmlpath.MustCompile("//*/RetrievePropertiesResponse/returnval/propSet[name='runtime']/val/powerState")
+	if value, ok := path.String(root); ok {
+		return value
+	} else {
+		return ""
+	}
+}
 
+func parsePathProperty(body *bytes.Buffer) (value string) {
+
+	root, _ := xmlpath.Parse(bytes.NewBuffer(body.Bytes()))
 	path := xmlpath.MustCompile("//RetrievePropertiesResponse//val")
 	iter := path.Iter(root)
 	values := make([]string, 0)
 
-	iter.Next() // skip top element "Datacenters"
+	// iter.Next() // skip top element "Datacenters"
 	for {
-		iter.Next() // skip id element
+		// iter.Next() // skip id element
 		ok := iter.Next()
 		if ok == false {
 			break
@@ -201,7 +219,57 @@ func (vim *VimClient) waitForIp(resultCh chan<- string, errCh chan<- error, vmId
 	}
 }
 
-func (vim *VimClient) MarkAsTemplate(vmId string) (err error) {
-	err = fmt.Errorf("MarkAsTemplate() NOT IMPLEMENTED YET", nil)
+func (vim *VimClient) waitUntilVmShutdownComplete(errCh chan<- error, vmId string) {
+	for {
+		powerState, err := vim.getVmPowerState(vmId)
+		if err != nil {
+			errCh <- err
+			return
+		}
+		if powerState == "poweredOff" {
+			log.Printf("VM's power state is '%s'", powerState)
+			errCh <- nil
+			return
+		}
+		log.Printf("VM's power state is '%s', retrying in 5 seconds...", powerState)
+		time.Sleep(5 * time.Second)
+	}
+}
+
+// shutdownGuest() calls the ShutdownGuest vSphere API method.
+func (vim *VimClient) shutdownGuest(vmId string) (err error) {
+
+	data := struct {
+		VmId string
+	}{
+		vmId,
+	}
+
+	t := template.Must(template.New("ShutdownGuest").Parse(ShutdownGuestRequestTemplate))
+
+	request, _ := vim.prepareRequest(t, data)
+	_, err = vim.Do(request)
+	if err != nil {
+		err = fmt.Errorf("Error calling ShutdownGuest: '%s'", err.Error())
+		return
+	}
+	return
+}
+
+func (vim *VimClient) markAsTemplate(vmId string) (err error) {
+	data := struct {
+		VmId string
+	}{
+		vmId,
+	}
+
+	t := template.Must(template.New("MarkAsTemplate").Parse(MarkAsTemplateRequestTemplate))
+
+	request, _ := vim.prepareRequest(t, data)
+	_, err = vim.Do(request)
+	if err != nil {
+		err = fmt.Errorf("Error calling MarkAsTemplate: '%s'", err.Error())
+		return
+	}
 	return
 }
