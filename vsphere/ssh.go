@@ -4,9 +4,8 @@ import (
 	"fmt"
 	"log"
 
-	gossh "code.google.com/p/go.crypto/ssh"
+	"code.google.com/p/go.crypto/ssh"
 	"github.com/mitchellh/multistep"
-	"github.com/mitchellh/packer/communicator/ssh"
 )
 
 // sshAddress returns the ssh address.
@@ -22,21 +21,22 @@ func sshAddress(state multistep.StateBag) (string, error) {
 }
 
 // sshConfig returns the ssh configuration.
-func sshConfig(state multistep.StateBag) (*gossh.ClientConfig, error) {
+func sshConfig(state multistep.StateBag) (*ssh.ClientConfig, error) {
 	log.Print("Getting SSH config...")
 	config := state.Get("config").(*Config)
+
+	log.Printf("sshConfig.User is '%s'\n", config.SSHUsername)
+
 	privateKey := string(config.privateKeyBytes)
-	keyring := new(ssh.SimpleKeychain)
-	if err := keyring.AddPEMKey(privateKey); err != nil {
+	signer, err := ssh.ParsePrivateKey([]byte(privateKey))
+	if err != nil {
 		return nil, fmt.Errorf("Error setting up SSH config: %s", err)
 	}
 
-	sshConfig := &gossh.ClientConfig{
+	return &ssh.ClientConfig{
 		User: config.SSHUsername,
-		Auth: []gossh.ClientAuth{gossh.ClientAuthKeyring(keyring)},
-	}
-
-	log.Printf("sshConfig.User is '%s'\n", sshConfig.User)
-
-	return sshConfig, nil
+		Auth: []ssh.AuthMethod{
+			ssh.PublicKeys(signer),
+		},
+	}, nil
 }
